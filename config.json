@@ -1,0 +1,90 @@
+{
+  "Application": {
+    "WindowSize": [
+      1,
+      24,
+      1183,
+      1012
+    ],
+    "ROIs": [
+      [
+        260,
+        76,
+        352,
+        284
+      ]
+    ],
+    "Templates": [
+      "./template/01.bmp",
+      "./template/02.bmp",
+      "./template/03.bmp",
+      "./template/04.bmp",
+      "./template/05.bmp",
+      "./template/06.bmp",
+      "./template/07.bmp",
+      "./template/08.bmp",
+      "./template/09.bmp",
+      "./template/10.bmp",
+      "./template/11.bmp",
+      "./template/12.bmp",
+      "./template/13.bmp",
+      "./template/14.bmp",
+      "./template/15.bmp",
+      "./template/16.bmp",
+      "./template/17.bmp",
+      "./template/18.bmp",
+      "./template/19.bmp",
+      "./template/20.bmp"
+    ]
+  },
+  "Camera": {
+    "SerialNumber": "19050819",
+    "Exposure": 10000,
+    "Gain": 0,
+    "Delay": 80,
+    "Light": 100,
+    "LightMode": "On"
+  },
+  "ISP": {
+    "MinArea": 100,
+    "BinCh1Apply": true,
+    "BinCh2Apply": true,
+    "BinCh3Apply": true,
+    "BinLowerLimit": [
+      39,
+      48,
+      128
+    ],
+    "BinUpperLimit": [
+      140,
+      173,
+      223
+    ],
+    "AInspect": true,
+    "ALowerLimit": [
+      0,
+      150,
+      0
+    ],
+    "AUpperLimit": [
+      255,
+      235,
+      255
+    ],
+    "BInspect": true,
+    "BLowerLimit": [
+      0,
+      0,
+      62
+    ],
+    "BUpperLimit": [
+      255,
+      255,
+      122
+    ]
+  },
+  "Communication": {
+    "DevicePath": "COM1",
+    "BaudRate": 115200
+  }
+}
