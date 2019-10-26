@@ -4,17 +4,17 @@ Surface inspector for agricultural products using Flir(previously PointGrey) USB
 # Dependencies
 1. Install Spinnaker SDK.
 1.1. The dependencies.
-# apt install libavcodec-ffmpeg56 libavformat-ffmpeg56 \
+$ apt install libavcodec-ffmpeg56 libavformat-ffmpeg56 \
 libswscale-ffmpeg3 libswresample-ffmpeg1 libavutil-ffmpeg54 \
 libusb-1.0-0 libgtkmm-2.4-dev
 1.1.1. Workaround
-# vi /etc/apt/source.list
+$ vi /etc/apt/source.list
 deb http://debian-archive.trafficmanager.net/debian/ stretch main
-# apt update
-# apt install libswscale4 libavcodec57 libavformat57
+$ apt update
+$ apt install libswscale4 libavcodec57 libavformat57
 
 1.2. Spinnaker
-# sh install_spinnaker.sh
+$ sh install_spinnaker.sh
 This is a script to assist with installation of the Spinnaker SDK.
 Would you like to continue and install all the Spinnaker SDK packages?
 [Y/n] $ 
@@ -144,23 +144,23 @@ $ <my_username>
 Follow the instructions.
 
 1.2.1. Modify the USB-FS memory in Linux.
-# vi /etc/default/grub
+$ vi /etc/default/grub
 	GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
 	as 
 	GRUB_CMDLINE_LINUX_DEFAULT="quiet splash usbcore.usbfs_memory_mb=1000"
-# update-grub
-# reboot
+$ update-grub
+$ reboot
 
 1.2.2. Increase the receive buffer size
-# vi /etc/sysctl.conf
+$ vi /etc/sysctl.conf
     net.core.rmem_max=10485760
     net.core.rmem_default=10485760
-# sysctl -p
+$ sysctl -p
 
 2. Install Spinnaker python module.
 2.1. Create virtualenv.
-# python3.7 -m venv ./venv
-# source ./venv/bin/activate
+$ python3.7 -m venv ./venv
+$ source ./venv/bin/activate
 2.2. Dependencies.
 (venv)$ pip install -U numpy
 2.3. Spinnaker.
