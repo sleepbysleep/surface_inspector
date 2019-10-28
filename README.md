@@ -2,7 +2,6 @@
 Surface inspector for agricultural products using Flir(previously PointGrey) USB3 camera with Spinnaker SDK, and PySpin, python module(1.26.0.31) with Opencv, PyQt5, PySerial, and etc.
 
 # Dependencies
-<<<<<<< HEAD
 ## 1. Install Spinnaker SDK.
 ### 1.1. The dependencies.
 <pre><code>$ apt install libavcodec-ffmpeg56 libavformat-ffmpeg56 libswscale-ffmpeg3 libswresample-ffmpeg1 libavutil-ffmpeg54 libusb-1.0-0 libgtkmm-2.4-dev</code></pre>
@@ -13,21 +12,6 @@ $ apt update
 $ apt install libswscale4 libavcodec57 libavformat57</code></pre>
 ### 1.2. Spinnaker
 <pre><code>$ sh install_spinnaker.sh
-=======
-1. Install Spinnaker SDK.
-1.1. The dependencies.
-$ apt install libavcodec-ffmpeg56 libavformat-ffmpeg56 \
-libswscale-ffmpeg3 libswresample-ffmpeg1 libavutil-ffmpeg54 \
-libusb-1.0-0 libgtkmm-2.4-dev
-1.1.1. Workaround
-$ vi /etc/apt/source.list
-deb http://debian-archive.trafficmanager.net/debian/ stretch main
-$ apt update
-$ apt install libswscale4 libavcodec57 libavformat57
-
-1.2. Spinnaker
-$ sh install_spinnaker.sh
->>>>>>> 4057690d452bf2fd0c4b79a95591bc8235b9b10e
 This is a script to assist with installation of the Spinnaker SDK.
 Would you like to continue and install all the Spinnaker SDK packages?
 [Y/n] $ 
@@ -157,18 +141,12 @@ $ (my_username)
 </code></pre>
 Follow the instructions.
 
-<<<<<<< HEAD
 #### 1.2.1. Modify the USB-FS memory in Linux.
 <pre><code>$ vi /etc/default/grub
-=======
-1.2.1. Modify the USB-FS memory in Linux.
-$ vi /etc/default/grub
->>>>>>> 4057690d452bf2fd0c4b79a95591bc8235b9b10e
 	GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
 	as 
 	GRUB_CMDLINE_LINUX_DEFAULT="quiet splash usbcore.usbfs_memory_mb=1000"
 $ update-grub
-<<<<<<< HEAD
 $ reboot</code></pre>
 
 #### 1.2.2. Increase the receive buffer size
@@ -189,25 +167,4 @@ $ source ./venv/bin/activate</code></pre>
 
 ## 3. Install python-dependencies.
 <pre><code>(venv)$ pip install PyQt5 pyserial construct PyCRC</code></pre>
-=======
-$ reboot
-
-1.2.2. Increase the receive buffer size
-$ vi /etc/sysctl.conf
-    net.core.rmem_max=10485760
-    net.core.rmem_default=10485760
-$ sysctl -p
-
-2. Install Spinnaker python module.
-2.1. Create virtualenv.
-$ python3.7 -m venv ./venv
-$ source ./venv/bin/activate
-2.2. Dependencies.
-(venv)$ pip install -U numpy
-2.3. Spinnaker.
-(venv)$ pip install spinnaker_python-1.26.0.31-cp37-cp37m-linux_x86_64.whl
-
-3. Install python-dependencies.
-(venv)$ pip install PyQt5 pyserial construct PyCRC
->>>>>>> 4057690d452bf2fd0c4b79a95591bc8235b9b10e
 
