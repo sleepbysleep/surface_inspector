@@ -2,23 +2,23 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
-#import PyQt5
-from PyQt5 import QtCore, QtGui, QtWidgets
-import time
+
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+
 import json
 import numpy as np
-import enum
+
 import cv2
-import serial
+#import serial
 import multiprocessing
 import PySpin
 import math
 
-#import camera
-#import camera_thread
-import qcamera
+import flir_camera as FLIRVision
 import numpy2qimage
-import serial_thread
+# import serial_thread
 from range_slider import RangeSlider
 from toggle_switch import Switch
 #import qdarkstyle
@@ -28,157 +28,165 @@ from toggle_switch import Switch
 #pytesseract.pytesseract.tesseract_cmd = r'<full_path_to_your_tesseract_executable>'
 # Example tesseract_cmd = r'C:\Program Files (x86)\Tesseract-OCR\tesseract'
 
-class ImageCanvas(QtWidgets.QLabel):
-    rectChanged = QtCore.pyqtSignal(QtCore.QRect)
+class ImageCanvas(QLabel):
+    rectChanged = pyqtSignal(QRect)
 
     def __init__(self, *args, **kwargs):
-        QtWidgets.QLabel.__init__(self, *args, **kwargs)
-        self.rubberBand = QtWidgets.QRubberBand(QtWidgets.QRubberBand.Rectangle, self)
+        super().__init__(*args, **kwargs)
+        self.rubberBand = QRubberBand(QRubberBand.Rectangle, self)
         self.setMouseTracking(True)
-        self.origin = QtCore.QPoint()
+        self.origin = QPoint()
         self.changeRubberBand = False
         self.allowRubberBand = False
-        self.setAlignment(QtCore.Qt.AlignCenter)
+        self.setAlignment(Qt.AlignCenter)
         self.viewRect = None
 
     def setRubberBand(self, state):
         self.allowRubberBand = state
 
     def mousePressEvent(self, event):
-        if self.viewRect is not None and self.viewRect.contains(event.pos()) and self.allowRubberBand and event.button() == QtCore.Qt.LeftButton:
+        if self.viewRect is not None and self.viewRect.contains(event.pos()) and self.allowRubberBand and event.button() == Qt.LeftButton:
             self.origin = event.pos()
-            self.rubberBand.setGeometry(QtCore.QRect(self.origin, QtCore.QSize()))
+            self.rubberBand.setGeometry(QRect(self.origin, QSize()))
             #self.rectChanged.emit(self.rubberBand.geometry())
             self.rubberBand.show()
             self.changeRubberBand = True
-        QtWidgets.QLabel.mousePressEvent(self, event)
+        super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
         if self.viewRect is not None and self.viewRect.contains(event.pos()) and self.changeRubberBand:
-            self.rubberBand.setGeometry(QtCore.QRect(self.origin, event.pos()).normalized())
+            self.rubberBand.setGeometry(QRect(self.origin, event.pos()).normalized())
             #self.rectChanged.emit(self.rubberBand.geometry())
-        QtWidgets.QLabel.mouseMoveEvent(self, event)
+        super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        if self.allowRubberBand and event.button() == QtCore.Qt.LeftButton:
+        if self.allowRubberBand and event.button() == Qt.LeftButton:
             #self.image2viewTransform.inverted().mapRect(self.rubberBand.geometry())
             view2image = self.image2viewTransform.inverted()[0]
             #print(view2image)
             self.rectChanged.emit(view2image.mapRect(self.rubberBand.geometry()))
             self.rubberBand.hide()
             self.changeRubberBand = False
-        QtWidgets.QLabel.mouseReleaseEvent(self, event)
+        super().mouseReleaseEvent(event)
 
-    @QtCore.pyqtSlot(np.ndarray)
+    @pyqtSlot(np.ndarray)
     def setImage(self, image, rect=None):
-        qimage = numpy2qimage.numpy2qimage(image).scaled(self.width(), self.height(), QtCore.Qt.KeepAspectRatio)
-        self.viewRect = QtCore.QRect(QtCore.QPoint((self.width()-qimage.width())/2, (self.height()-qimage.height())/2), qimage.size())
+        qimage = numpy2qimage.numpy2qimage(image).scaled(self.width(), self.height(), Qt.KeepAspectRatio)
+        self.viewRect = QRect(QPoint(int((self.width()-qimage.width())/2), int((self.height()-qimage.height())/2)), qimage.size())
         #self.imageRatio = self.width() / image.shape[1]
-        self.image2viewTransform = QtGui.QTransform(qimage.width()/image.shape[1], 0.0,
-                                                    0.0, qimage.height()/image.shape[0],
-                                                    self.viewRect.topLeft().x(), self.viewRect.topLeft().y())
+        self.image2viewTransform = QTransform(
+            qimage.width()/image.shape[1], 0.0,
+            0.0, qimage.height()/image.shape[0],
+            self.viewRect.topLeft().x(), self.viewRect.topLeft().y()
+        )
 
         if rect is not None:
-            painter = QtGui.QPainter(qimage)
-            painter.setPen(QtGui.QPen(QtGui.QColor(0,100,255,100), 3))
+            painter = QPainter(qimage)
+            painter.setPen(QPen(QColor(0,100,255,100), 3))
             painter.drawRect(self.image2viewTransform.mapRect(rect).translated(-self.viewRect.topLeft()))
             painter.end()
-        QtWidgets.QLabel.setPixmap(self, QtGui.QPixmap.fromImage(qimage))
+        super().setPixmap(QPixmap.fromImage(qimage))
 
-class CustomSpinBox(QtWidgets.QSpinBox):
+class CustomSpinBox(QSpinBox):
     def __init__(self, *args):
-        QtWidgets.QSpinBox.__init__(self, *args)
+        super().__init__(*args)
         self.setRange(0, 999)
     def textFromValue(self, value):
         return "%03d" % value
 
-class SurfaceInspectWindow(QtWidgets.QWidget):
-    windowGeometry = QtCore.QRect(0, 0, 1500, 1300)
-    serialNumber = None # str
-    imageROIs = None #QtCore.QRect(0, 0, 100, 100)7
-    '''
-    roiColors = [(128,0,0), # Marron
-                 (170,110,40), # Brown
-                 (128,128,0), # Olive
-                 (0,128,128), # Teal
-                 (0,0,128), # Navy
-                 (230,25,75), # Red
-                 (245,130,48), # Orange
-                 (255,225,25), # Yellow
-                 (210,245,60), # Lime
-                 (60,180,75), # Green
-                 (70,240,240), # Cyan
-                 (0,130,200), # Blue
-                 (145,30,180), # Purple
-                 (240,50,230), # Magenta
-                 (128,128,128), # Grey
-                 (250,190,190), # Pink
-                 (255,215,180), # Apricot
-                 (255,250,200), # BEige
-                 (170,255,195), # Mint
-                 (230,190,255)] # Lavender
-    '''
-    roiColors = [(128,0,0), # Marron
-                 (170,110,40), # Brown
-                 (0,128,128), # Teal
-                 (0,0,128), # Navy
-                 (230,25,75), # Red
-                 (245,130,48), # Orange
-                 (255,225,25), # Yellow
-                 (60,180,75), # Green
-                 (70,240,240), # Cyan
-                 (0,130,200), # Blue
-                 (240,50,230), # Magenta
-                 (128,128,128), # Grey
-                 (250,190,190), # Pink
-                 (255,250,200), # Beige
-                 (170,255,195), # Mint
-                 (230,190,255)] # Lavender
+class SurfaceInspectWindow(QWidget):
+    def initAssets(self):
+        self.windowGeometry = QRect(0, 0, 1500, 1300)
+        self.serialNumber = None  # str
+        self.imageROIs = None  # QtCore.QRect(0, 0, 100, 100)7
+        '''
+        self.roiColors = [(128,0,0), # Marron
+                     (170,110,40), # Brown
+                     (128,128,0), # Olive
+                     (0,128,128), # Teal
+                     (0,0,128), # Navy
+                     (230,25,75), # Red
+                     (245,130,48), # Orange
+                     (255,225,25), # Yellow
+                     (210,245,60), # Lime
+                     (60,180,75), # Green
+                     (70,240,240), # Cyan
+                     (0,130,200), # Blue
+                     (145,30,180), # Purple
+                     (240,50,230), # Magenta
+                     (128,128,128), # Grey
+                     (250,190,190), # Pink
+                     (255,215,180), # Apricot
+                     (255,250,200), # BEige
+                     (170,255,195), # Mint
+                     (230,190,255)] # Lavender
+        '''
+        self.roiColors = [(128, 0, 0),  # Marron
+                     (170, 110, 40),  # Brown
+                     (0, 128, 128),  # Teal
+                     (0, 0, 128),  # Navy
+                     (230, 25, 75),  # Red
+                     (245, 130, 48),  # Orange
+                     (255, 225, 25),  # Yellow
+                     (60, 180, 75),  # Green
+                     (70, 240, 240),  # Cyan
+                     (0, 130, 200),  # Blue
+                     (240, 50, 230),  # Magenta
+                     (128, 128, 128),  # Grey
+                     (250, 190, 190),  # Pink
+                     (255, 250, 200),  # Beige
+                     (170, 255, 195),  # Mint
+                     (230, 190, 255)]  # Lavender
 
-    roiIndex = 0
-    templatePaths = None
-    templateFeatures = None
+        self.roiIndex = 0
+        self.templatePaths = None
+        self.templateFeatures = None
 
-    # featureExtractor = cv2.xfeatures2d.SIFT_create()
-    # featureExtractor = cv2.xfeatures2d.SURF_create()
-    featureExtractor = cv2.ORB_create(nfeatures=1500)
-    # featureExtractor = cv2.BRISK_create()
-    # featureExtractor = cv2.KAZE_create()
-    # featureExtractor = cv2.AKAZE_create()
-    # featureExtractor = cv2.BRISK_create()
+        # featureExtractor = cv2.xfeatures2d.SIFT_create()
+        # featureExtractor = cv2.xfeatures2d.SURF_create()
+        self.featureExtractor = cv2.ORB_create(nfeatures=1500)
+        # featureExtractor = cv2.BRISK_create()
+        # featureExtractor = cv2.KAZE_create()
+        # featureExtractor = cv2.AKAZE_create()
+        # featureExtractor = cv2.BRISK_create()
 
-    FLANN_INDEX_LSH = 6
-    flannMatcher = cv2.FlannBasedMatcher(
-        indexParams={'algorithm': FLANN_INDEX_LSH, 'table_number': 6, 'key_size': 12, 'multi_probe_level': 1},
-        searchParams={'checks': 50})
-    #flannMatcher = cv2.FlannBasedMatcher(
-    #    indexParams={'algorithm':FLANN_INDEX_LSH, 'table_number':12, 'key_size':20, 'multi_probe_level':2},
-    #    searchParams={'checks':50})
+        FLANN_INDEX_LSH = 6
+        self.flannMatcher = cv2.FlannBasedMatcher(
+            indexParams={'algorithm': FLANN_INDEX_LSH, 'table_number': 6, 'key_size': 12, 'multi_probe_level': 1},
+            searchParams={'checks': 50})
+        # flannMatcher = cv2.FlannBasedMatcher(
+        #    indexParams={'algorithm':FLANN_INDEX_LSH, 'table_number':12, 'key_size':20, 'multi_probe_level':2},
+        #    searchParams={'checks':50})
 
-    exposureValue = 1000 # us
-    gainValue = 12 # db
-    delayValue = 80 # ms
-    lightValue = 100 # ms
-    lightMode = 'Auto'
-    commPath = 'COM1'
-    commBaudrate = 115200
-    aRange = [[0,128,0], [255,255,255]]
-    bRange = [[0,0,128], [255,255,255]]
-    binRange = [[0,0,0], [255,255,255]]
-    latestImage = None # numpy.array for image
-    minArea = 100
-    binCh1Apply = True
-    binCh2Apply = True
-    binCh3Apply = True
-    aInspect = True
-    bInspect = False
+        self.exposureValue = 1000  # us
+        self.gainValue = 12  # db
+        self.delayValue = 80  # ms
+        self.lightValue = 100  # ms
+        self.lightMode = 'Auto'
+        self.commPath = 'COM1'
+        self.commBaudrate = 115200
+        self.aRange = [[0, 128, 0], [255, 255, 255]]
+        self.bRange = [[0, 0, 128], [255, 255, 255]]
+        self.binRange = [[0, 0, 0], [255, 255, 255]]
+        self.latestImage = None  # numpy.array for image
+        self.minArea = 100
+        self.binCh1Apply = True
+        self.binCh2Apply = True
+        self.binCh3Apply = True
+        self.aInspect = True
+        self.bInspect = False
+
+        self.elapsedTime = QElapsedTimer()
+        self.fpsCount = 0
+        self.fpsSum = 0.0
+        self.fpsMessage = ''
 
     def loadConfig(self, filename='config.json', do_apply=False):
         json_data = open(filename).read()
         load_dict = json.loads(json_data)
 
         app_dict = load_dict['Application']
-        self.windowGeometry = QtCore.QRect(app_dict['WindowSize'][0], app_dict['WindowSize'][1], app_dict['WindowSize'][2], app_dict['WindowSize'][3])
+        self.windowGeometry = QRect(app_dict['WindowSize'][0], app_dict['WindowSize'][1], app_dict['WindowSize'][2], app_dict['WindowSize'][3])
         self.imageROIs = app_dict['ROIs']
         #self.imageROI = QtCore.QRect(app_dict['ROIs'][0], app_dict['ROIs'][1], app_dict['ROIs'][2], app_dict['ROIs'][3])
         self.templatePaths = app_dict['Templates']
@@ -235,7 +243,7 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         self.commBaudrate = comm_dict['BaudRate']
 
         if do_apply:
-            self.setGeometry(self.windowGeometry)
+            #self.setGeometry(self.windowGeometry)
             self.exposureSlider.setValue(self.exposureValue)
             self.cameraThread.setExposure(self.exposureValue)
             self.gainSlider.setValue(self.gainValue)
@@ -295,19 +303,23 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
 
     def __init__(self, config_file='config.json'):
         super().__init__()
+
+        self.initAssets()
+
         # TODO: Load default config file
         self.loadConfig(config_file)
 
         #self.setGeometry(self.windowGeometry)
         #self.setFixedSize(1500, 1300)
-        self.resize(self.windowGeometry.width(), self.windowGeometry.height())
+        #self.resize(self.windowGeometry.width(), self.windowGeometry.height())
 
         try:
-            qcamera.initSystem()
-            self.camera = qcamera.QCamera()
+            FLIRVision.initSystem()
+            self.visionCamera = FLIRVision.Camera()
+            self.setWindowTitle('Surface Inspector - ' + self.visionCamera.getDeviceName())
         except PySpin.SpinnakerException as error:
-            msg = QtWidgets.QMessageBox()
-            msg.setIcon(QtWidgets.QMessageBox.Critical)
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
             msg.setText("Could not connect to the camera.")
             msg.setInformativeText(str(error))
             msg.setWindowTitle("Connection failed")
@@ -316,22 +328,22 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
 
         self.initUI()
 
-        try:
-            self.serialThread = serial_thread.worker(self.commPath, self.commBaudrate)
-            self.serialThread.shutdownSignal.connect(self.onReceiveShutdown)
-            self.serialThread.thresholdSignal.connect(self.onReceiveThreshold)
-            self.serialThread.triggerSignal.connect(self.onSenseTrigger)
-            self.serialThread.resetSignal.connect(self.onResetCount)
-            self.serialThread.start()
-        except serial.serialutil.SerialException as error:
-            msg = QtWidgets.QMessageBox()
-            msg.setIcon(QtWidgets.QMessageBox.Critical)
-            msg.setText("Could not connect to the serial device.")
-            msg.setInformativeText(str(error))
-            msg.setWindowTitle("Connection failed")
-            msg.exec_()
-            #self.quit()
-            self.serialThread = None
+        # try:
+        #     self.serialThread = serial_thread.worker(self.commPath, self.commBaudrate)
+        #     self.serialThread.shutdownSignal.connect(self.onReceiveShutdown)
+        #     self.serialThread.thresholdSignal.connect(self.onReceiveThreshold)
+        #     self.serialThread.triggerSignal.connect(self.onSenseTrigger)
+        #     self.serialThread.resetSignal.connect(self.onResetCount)
+        #     self.serialThread.start()
+        # except serial.serialutil.SerialException as error:
+        #     msg = QtWidgets.QMessageBox()
+        #     msg.setIcon(QtWidgets.QMessageBox.Critical)
+        #     msg.setText("Could not connect to the serial device.")
+        #     msg.setInformativeText(str(error))
+        #     msg.setWindowTitle("Connection failed")
+        #     msg.exec_()
+        #     #self.quit()
+        #     self.serialThread = None
 
         # Preparation for Trigger Mode
         self.onRadio.setEnabled(False)
@@ -355,17 +367,23 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
             self.roiButton.click()
         self.roiButton.setEnabled(False)
 
-        self.setWindowTitle('Surface Inspector - Serial#: {0:s}, Config: {1:s}'.format(self.camera.cameraObject.DeviceSerialNumber(), config_file))
+        self.setWindowTitle(
+            'Surface Inspector - Serial#: {0:s}, Config: {1:s}'.format(
+                self.visionCamera.getDeviceName(), config_file
+            )
+        )
 
-        self.camera.sendImage.connect(self.onReceiveImage)
-        self.camera.setTrigger(qcamera.TriggerType.SOFTWARE)
-        self.camera.enableAcquisition()
-        self.fpsTime = time.time()
-        self.camera.sendSwTrigger()
+        self.visionCamera.setTrigger(FLIRVision.TriggerType.SOFTWARE)
+        self.visionCamera.imageArrived.connect(self.onReceiveImage)
+        self.visionCamera.enableAcquisition()
+
+        #self.fpsTime = time.time()
+        self.elapsedTime.start()
+        self.visionCamera.sendSwTrigger()
 
     def __del__(self):
-        del self.camera
-        qcamera.deinitSystem()
+        del self.visionCamera
+        FLIRVision.deinitSystem()
 
     def initUI(self):
         #self.setMouseTracking(True)
@@ -373,14 +391,14 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         self.imageCanvas = ImageCanvas() #QtWidgets.QLabel()
         self.imageCanvas.rectChanged.connect(self.setROI)
 
-        exp_tag = QtWidgets.QLabel('Exp.')
-        self.exposureSlider = QtWidgets.QSlider(QtCore.Qt.Vertical)
+        exp_tag = QLabel('Exp.')
+        self.exposureSlider = QSlider(Qt.Vertical)
         #self.exposureSlider.setMinimumHeight(30)
         #self.exposureSlider.setRange(self.cameraThread.cameraObject.getMinExposure(), self.cameraThread.cameraObject.getMaxExposure())
-        self.exposureSlider.setRange(self.camera.getMinExposure(), 100000)
+        self.exposureSlider.setRange(int(self.visionCamera.getMinExposure()), 100000)
         self.exposureSlider.setObjectName('Exposure')
-        self.exposureSlider.setFocusPolicy(QtCore.Qt.StrongFocus)
-        self.exposureSlider.setTickPosition(QtWidgets.QSlider.NoTicks)
+        self.exposureSlider.setFocusPolicy(Qt.StrongFocus)
+        self.exposureSlider.setTickPosition(QSlider.NoTicks)
         self.exposureSlider.setTickInterval(1000)
         self.exposureSlider.setSingleStep(100)
         self.exposureSlider.setValue(self.exposureValue)
@@ -390,72 +408,72 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
                              + "; background-color: " + disabledColor + " }")
         '''
 
-        self.camera.setExposure(self.exposureValue)
+        self.visionCamera.setExposure(self.exposureValue)
         self.exposureSlider.valueChanged.connect(self.onExposureChangedEvent)
-        self.exposureLabel = QtWidgets.QLabel(str(self.exposureValue))
+        self.exposureLabel = QLabel(str(self.exposureValue))
         self.exposureLabel.setMinimumWidth(50)
-        exp_unit = QtWidgets.QLabel('[us]')
+        exp_unit = QLabel('[us]')
         #print('Exposure MinMax:', self.cameraThread.cameraObject.getMinExposure(), self.cameraThread.cameraObject.getMaxExposure())
 
-        gain_tag = QtWidgets.QLabel('Gain')
-        self.gainSlider = QtWidgets.QSlider(QtCore.Qt.Vertical)
+        gain_tag = QLabel('Gain')
+        self.gainSlider = QSlider(Qt.Vertical)
         #self.gainSlider.setMinimumHeight(30)
-        self.gainSlider.setRange(self.camera.getMinGain(), self.camera.getMaxGain())
+        self.gainSlider.setRange(int(self.visionCamera.getMinGain()), int(self.visionCamera.getMaxGain()))
         self.gainSlider.setObjectName('Gain')
-        self.gainSlider.setFocusPolicy(QtCore.Qt.StrongFocus)
-        self.gainSlider.setTickPosition(QtWidgets.QSlider.NoTicks)
+        self.gainSlider.setFocusPolicy(Qt.StrongFocus)
+        self.gainSlider.setTickPosition(QSlider.NoTicks)
         self.gainSlider.setTickInterval(1)
         self.gainSlider.setSingleStep(1)
         self.gainSlider.setValue(self.gainValue)
-        self.camera.setGain(self.gainValue)
+        self.visionCamera.setGain(self.gainValue)
         self.gainSlider.valueChanged.connect(self.onGainChangedEvent)
-        self.gainLabel = QtWidgets.QLabel(str(self.gainValue))
+        self.gainLabel = QLabel(str(self.gainValue))
         self.gainLabel.setMinimumWidth(50)
-        gain_unit = QtWidgets.QLabel('[db]')
+        gain_unit = QLabel('[db]')
         #print('Gain MinMax:', self.cameraThread.cameraObject.getMinGain(), self.cameraThread.cameraObject.getMaxGain())
 
-        delay_tag = QtWidgets.QLabel('Delay')
-        self.delaySlider = QtWidgets.QSlider(QtCore.Qt.Vertical)
+        delay_tag = QLabel('Delay')
+        self.delaySlider = QSlider(Qt.Vertical)
         #self.delaySlider.setMinimumHeight(30)
         #self.cameraThread.setExposure(self.exposureValue)
         # TODO: fly the delay of trigger into Arduino
         self.delaySlider.setRange(0, 255)
         self.delaySlider.setObjectName('Delay')
-        self.delaySlider.setFocusPolicy(QtCore.Qt.StrongFocus)
-        self.delaySlider.setTickPosition(QtWidgets.QSlider.NoTicks)
+        self.delaySlider.setFocusPolicy(Qt.StrongFocus)
+        self.delaySlider.setTickPosition(QSlider.NoTicks)
         self.delaySlider.setTickInterval(10)
         self.delaySlider.setSingleStep(1)
         self.delaySlider.setValue(self.delayValue)
         self.delaySlider.valueChanged.connect(self.onDelayChangedEvent)
-        self.delayLabel = QtWidgets.QLabel(str(self.delayValue))
+        self.delayLabel = QLabel(str(self.delayValue))
         self.delayLabel.setMinimumWidth(50)
-        delay_unit = QtWidgets.QLabel('[ms]')
+        delay_unit = QLabel('[ms]')
 
-        light_tag = QtWidgets.QLabel('Light')
+        light_tag = QLabel('Light')
         #light_tag.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-        light_tag.setAlignment(QtCore.Qt.AlignCenter)
+        light_tag.setAlignment(Qt.AlignCenter)
 
-        self.lightSlider = QtWidgets.QSlider(QtCore.Qt.Vertical)
+        self.lightSlider = QSlider(Qt.Vertical)
         #self.lightSlider.setMinimumHeight(30)
         #self.cameraThread.setGain(self.lightValue)
         # TODO: fly the period of lightening into Arduino
         self.lightSlider.setRange(0, 255)
         self.lightSlider.setObjectName('Light')
-        self.lightSlider.setFocusPolicy(QtCore.Qt.StrongFocus)
-        self.lightSlider.setTickPosition(QtWidgets.QSlider.NoTicks)
+        self.lightSlider.setFocusPolicy(Qt.StrongFocus)
+        self.lightSlider.setTickPosition(QSlider.NoTicks)
         self.lightSlider.setTickInterval(10)
         self.lightSlider.setSingleStep(1)
         self.lightSlider.setValue(self.lightValue)
         self.lightSlider.valueChanged.connect(self.onLightChangedEvent)
-        self.lightLabel = QtWidgets.QLabel(str(self.lightValue))
+        self.lightLabel = QLabel(str(self.lightValue))
         self.lightLabel.setMinimumWidth(50)
-        light_unit = QtWidgets.QLabel('[ms]')
+        light_unit = QLabel('[ms]')
 
-        grid00_layout = QtWidgets.QGridLayout()
+        grid00_layout = QGridLayout()
         #grid0_layout.setContentsMargins(20,20,20,20)
         grid00_layout.setSpacing(10)
         grid00_layout.setContentsMargins(20,20,20,20)
-        grid00_layout.setAlignment(QtCore.Qt.AlignCenter)
+        grid00_layout.setAlignment(Qt.AlignCenter)
         grid00_layout.addWidget(exp_tag, 0, 0)
         grid00_layout.addWidget(self.exposureSlider, 1, 0)
         grid00_layout.addWidget(self.exposureLabel, 2, 0)
@@ -473,39 +491,39 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         grid00_layout.addWidget(self.lightLabel, 2, 3)
         grid00_layout.addWidget(light_unit, 3, 3)
 
-        light_tag = QtWidgets.QLabel('Light')
-        self.onRadio = QtWidgets.QRadioButton('On')
-        self.offRadio = QtWidgets.QRadioButton('Off')
-        self.autoRadio = QtWidgets.QRadioButton('Auto')
+        light_tag = QLabel('Light')
+        self.onRadio = QRadioButton('On')
+        self.offRadio = QRadioButton('Off')
+        self.autoRadio = QRadioButton('Auto')
         self.onRadio.clicked.connect(self.onLightMode)
         self.offRadio.clicked.connect(self.onLightMode)
         self.autoRadio.clicked.connect(self.onLightMode)
         self.onRadio.setChecked(True if self.lightMode == 'On' else False)
         self.offRadio.setChecked(True if self.lightMode == 'Off' else False)
         self.autoRadio.setChecked(True if self.lightMode == 'Auto' else False)
-        hbox01_layout = QtWidgets.QHBoxLayout()
+        hbox01_layout = QHBoxLayout()
         hbox01_layout.setSpacing(10)
         hbox01_layout.setContentsMargins(20,20,20,20)
         hbox01_layout.addWidget(self.onRadio)
         hbox01_layout.addWidget(self.offRadio)
         hbox01_layout.addWidget(self.autoRadio)
 
-        vbox01_layout = QtWidgets.QVBoxLayout()
+        vbox01_layout = QVBoxLayout()
         vbox01_layout.setSpacing(10)
         vbox01_layout.setContentsMargins(10,10,10,10)
         vbox01_layout.addLayout(grid00_layout)
         vbox01_layout.addWidget(light_tag)
         vbox01_layout.addLayout(hbox01_layout)
 
-        group00_box = QtWidgets.QGroupBox('Control')
+        group00_box = QGroupBox('Control')
         group00_box.setLayout(vbox01_layout)
 
-        hbox0_layout = QtWidgets.QHBoxLayout()
+        hbox0_layout = QHBoxLayout()
         hbox0_layout.addWidget(self.imageCanvas, 1)
         hbox0_layout.addWidget(group00_box)
 
         ########################################################################
-        self.resultLCD = QtWidgets.QLCDNumber(3)
+        self.resultLCD = QLCDNumber(3)
         #self.resultLCD.setGeometry(QtCore.QRect(20, 10, 61, 61))
         #self.resultLCD.setFixedSize(400, 300)
         self.resultLCD.setMinimumWidth(400)
@@ -515,21 +533,21 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         self.resultLCD.setStyleSheet('QLCDNumber {color: white; border: 0px;}')
         #self.resultLCD.setFrameStyle(QtWidgets.QFrame.NoFrame)
         self.resultLCD.setDecMode()
-        self.resultLCD.setSegmentStyle(QtWidgets.QLCDNumber.Flat)
+        self.resultLCD.setSegmentStyle(QLCDNumber.Flat)
         self.resultLCD.display('{0:03d}'.format(99))
         self.resultLCD.repaint()
-        unit_label = QtWidgets.QLabel('%')
+        unit_label = QLabel('%')
         #unit_label.setMinimumWidth(100)
         unit_label.setMinimumHeight(300)
         unit_label.setStyleSheet('font:20pt;')
         #unit_label.setFon
-        hbox10_layout = QtWidgets.QHBoxLayout()
+        hbox10_layout = QHBoxLayout()
         hbox10_layout.addWidget(self.resultLCD)
         hbox10_layout.addWidget(unit_label)
         #group10_box = QtWidgets.QGroupBox('Ratio')
         #group10_box.setLayout(hbox10_layout)
 
-        ch1_tag = QtWidgets.QLabel('Ch1:')
+        ch1_tag = QLabel('Ch1:')
         '''
         self.ch1ToggleSwitch = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         self.ch1ToggleSwitch.setRange(0, 1)
@@ -544,9 +562,9 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         self.ch1Switch = Switch(thumb_radius=12, track_radius=15)
         self.ch1Switch.setChecked(self.binCh1Apply)
         self.ch1Switch.toggled.connect(self.onCh1ToggledEvent)
-        self.ch1LowerLabel = QtWidgets.QLabel(str(self.binRange[0][0]))
-        self.ch1UpperLabel = QtWidgets.QLabel(str(self.binRange[1][0]))
-        self.ch1RangeSlider = RangeSlider(QtCore.Qt.Horizontal)
+        self.ch1LowerLabel = QLabel(str(self.binRange[0][0]))
+        self.ch1UpperLabel = QLabel(str(self.binRange[1][0]))
+        self.ch1RangeSlider = RangeSlider(Qt.Horizontal)
         self.ch1RangeSlider.setMinimumHeight(30)
         self.ch1RangeSlider.setMinimum(0)
         self.ch1RangeSlider.setMaximum(255)
@@ -554,13 +572,13 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         self.ch1RangeSlider.setHigh(self.binRange[1][0])
         self.ch1RangeSlider.sliderMoved.connect(self.onCh1ChangedEvent)
 
-        ch2_tag = QtWidgets.QLabel('Ch2:')
+        ch2_tag = QLabel('Ch2:')
         self.ch2Switch = Switch(thumb_radius=12, track_radius=15)
         self.ch2Switch.setChecked(self.binCh2Apply)
         self.ch2Switch.toggled.connect(self.onCh2ToggledEvent)
-        self.ch2LowerLabel = QtWidgets.QLabel(str(self.binRange[0][1]))
-        self.ch2UpperLabel = QtWidgets.QLabel(str(self.binRange[1][1]))
-        self.ch2RangeSlider = RangeSlider(QtCore.Qt.Horizontal)
+        self.ch2LowerLabel = QLabel(str(self.binRange[0][1]))
+        self.ch2UpperLabel = QLabel(str(self.binRange[1][1]))
+        self.ch2RangeSlider = RangeSlider(Qt.Horizontal)
         self.ch2RangeSlider.setMinimumHeight(30)
         self.ch2RangeSlider.setMinimum(0)
         self.ch2RangeSlider.setMaximum(255)
@@ -568,13 +586,13 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         self.ch2RangeSlider.setHigh(self.binRange[1][1])
         self.ch2RangeSlider.sliderMoved.connect(self.onCh2ChangedEvent)
 
-        ch3_tag = QtWidgets.QLabel('Ch3:')
+        ch3_tag = QLabel('Ch3:')
         self.ch3Switch = Switch(thumb_radius=12, track_radius=15)
         self.ch3Switch.setChecked(self.binCh3Apply)
         self.ch3Switch.toggled.connect(self.onCh3ToggledEvent)
-        self.ch3LowerLabel = QtWidgets.QLabel(str(self.binRange[0][2]))
-        self.ch3UpperLabel = QtWidgets.QLabel(str(self.binRange[1][2]))
-        self.ch3RangeSlider = RangeSlider(QtCore.Qt.Horizontal)
+        self.ch3LowerLabel = QLabel(str(self.binRange[0][2]))
+        self.ch3UpperLabel = QLabel(str(self.binRange[1][2]))
+        self.ch3RangeSlider = RangeSlider(Qt.Horizontal)
         self.ch3RangeSlider.setMinimumHeight(30)
         self.ch3RangeSlider.setMinimum(0)
         self.ch3RangeSlider.setMaximum(255)
@@ -583,13 +601,13 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         self.ch3RangeSlider.sliderMoved.connect(self.onCh3ChangedEvent)
         #self.ch1RangeSlider.setTickPosition(QtWidgets.QSlider.TicksBelow)
 
-        a_tag = QtWidgets.QLabel('A*:')
+        a_tag = QLabel('A*:')
         self.aSwitch = Switch(thumb_radius=12, track_radius=15)
         self.aSwitch.setChecked(self.aInspect)
         self.aSwitch.toggled.connect(self.onAToggledEvent)
-        self.aLowerLabel = QtWidgets.QLabel(str(self.aRange[0][1]))
-        self.aUpperLabel = QtWidgets.QLabel(str(self.aRange[1][1]))
-        self.aRangeSlider = RangeSlider(QtCore.Qt.Horizontal)
+        self.aLowerLabel = QLabel(str(self.aRange[0][1]))
+        self.aUpperLabel = QLabel(str(self.aRange[1][1]))
+        self.aRangeSlider = RangeSlider(Qt.Horizontal)
         self.aRangeSlider.setMinimumHeight(30)
         self.aRangeSlider.setMinimum(0)
         self.aRangeSlider.setMaximum(255)
@@ -597,13 +615,13 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         self.aRangeSlider.setHigh(self.aRange[1][1])
         self.aRangeSlider.sliderMoved.connect(self.onAChangedEvent)
 
-        b_tag = QtWidgets.QLabel('B*:')
+        b_tag = QLabel('B*:')
         self.bSwitch = Switch(thumb_radius=12, track_radius=15)
         self.bSwitch.setChecked(self.bInspect)
         self.bSwitch.toggled.connect(self.onBToggledEvent)
-        self.bLowerLabel = QtWidgets.QLabel(str(self.bRange[0][2]))
-        self.bUpperLabel = QtWidgets.QLabel(str(self.bRange[1][2]))
-        self.bRangeSlider = RangeSlider(QtCore.Qt.Horizontal)
+        self.bLowerLabel = QLabel(str(self.bRange[0][2]))
+        self.bUpperLabel = QLabel(str(self.bRange[1][2]))
+        self.bRangeSlider = RangeSlider(Qt.Horizontal)
         self.bRangeSlider.setMinimumHeight(30)
         self.bRangeSlider.setMinimum(0)
         self.bRangeSlider.setMaximum(255)
@@ -611,7 +629,7 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         self.bRangeSlider.setHigh(self.bRange[1][2])
         self.bRangeSlider.sliderMoved.connect(self.onBChangedEvent)
 
-        grid11_layout = QtWidgets.QGridLayout()
+        grid11_layout = QGridLayout()
         grid11_layout.setSpacing(10)
         grid11_layout.setContentsMargins(20,20,20,10)
         grid11_layout.addWidget(ch1_tag, 0, 0)
@@ -640,31 +658,31 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         grid11_layout.addWidget(self.bUpperLabel, 4, 3)
         grid11_layout.addWidget(self.bSwitch, 4, 4)
 
-        self.group11_box = QtWidgets.QGroupBox('ISP')
+        self.group11_box = QGroupBox('ISP')
         self.group11_box.setLayout(grid11_layout)
 
 
-        hbox1_layout = QtWidgets.QHBoxLayout()
+        hbox1_layout = QHBoxLayout()
         #hbox1_layout.addWidget(group10_box)
         hbox1_layout.addLayout(hbox10_layout)
         hbox1_layout.addWidget(self.group11_box, 1)
         ########################################################
 
-        self.modeButton = QtWidgets.QPushButton('Trigger Mode')
+        self.modeButton = QPushButton('Trigger Mode')
         self.modeButton.setCheckable(True)
         self.modeButton.setMinimumHeight(50)
         self.modeButton.toggled.connect(self.onModeToggledEvent)
 
-        self.roiButton = QtWidgets.QPushButton('Locked ROI')
+        self.roiButton = QPushButton('Locked ROI')
         self.roiButton.setCheckable(True)
         self.roiButton.setMinimumHeight(50)
         self.roiButton.toggled.connect(self.onRoiToggledEvent)
 
-        config_button = QtWidgets.QPushButton('Save Config')
+        config_button = QPushButton('Save Config')
         config_button.setMinimumHeight(50)
         config_button.clicked.connect(self.onConfigClickedEvent)
 
-        exit_button = QtWidgets.QPushButton('Exit')
+        exit_button = QPushButton('Exit')
         exit_button.setMinimumHeight(50)
         #exit_button.clicked.connect(self.exitProgram)
         exit_button.clicked.connect(self.close)
@@ -687,32 +705,32 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         #self.imageCntSpinBox.setRange(0, 999)
 
         #image_spin_box.valueChanged.connect(self.)
-        self.imageButton = QtWidgets.QPushButton('Save image')
+        self.imageButton = QPushButton('Save image')
         self.imageButton.setCheckable(True)
         self.imageButton.setMinimumHeight(40)
         self.imageButton.clicked.connect(self.onImageClickedEvent)
 
-        hbox3_layout = QtWidgets.QHBoxLayout()
+        hbox3_layout = QHBoxLayout()
         hbox3_layout.setSpacing(20)
         hbox3_layout.setContentsMargins(20,20,20,10)
         hbox3_layout.addWidget(self.modeButton,1)
         hbox3_layout.addWidget(self.roiButton, 1)
         hbox3_layout.addWidget(config_button, 1)
         hbox3_layout.addWidget(exit_button, 1)
-        hbox31_layout = QtWidgets.QHBoxLayout()
+        hbox31_layout = QHBoxLayout()
         #hbox31_layout.addWidget(self.imageCntLCD)
         hbox31_layout.addWidget(self.imageCntSpinBox)
         hbox31_layout.addWidget(self.imageButton, 1)
         hbox3_layout.addLayout(hbox31_layout)
 
-        group3_box = QtWidgets.QGroupBox('Operation')
+        group3_box = QGroupBox('Operation')
         group3_box.setLayout(hbox3_layout)
 
         # TODO: Statusbar to print message
-        self.statusBar = QtWidgets.QStatusBar(self)
+        self.statusBar = QStatusBar(self)
         #self.statusBar.showMessage('Hello World.')
 
-        vbox_layout = QtWidgets.QVBoxLayout()
+        vbox_layout = QVBoxLayout()
         vbox_layout.addLayout(hbox0_layout, 1)
         #vbox_layout.addWidget(self.imageCanvas, 1) # Expanding
         #vbox_layout.addWidget(group1_box)
@@ -723,7 +741,7 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
 
         self.setLayout(vbox_layout)
 
-    @QtCore.pyqtSlot(QtCore.QRect)
+    @pyqtSlot(QRect)
     def setROI(self, rect):
         #self.imageROI = rect.normalized()
         self.imageROIs[self.roiIndex] = [rect.normalized().x(), rect.normalized().y(), rect.normalized().width(), rect.normalized().height()]
@@ -732,7 +750,7 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         base_h,base_w = image.shape[:2]
 
         ### Plain
-        hit_scores = np.zeros(len(templates), dtype=np.float)
+        hit_scores = np.zeros(len(templates), dtype=np.float32)
         hit_locs = []
         for i,template in enumerate(templates):
             #print(template)
@@ -851,6 +869,8 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         return foreground_mask, a_mask, b_mask, None
         '''
         ###################################################
+
+
         #start_time = time.time()
         yuv_image = cv2.cvtColor(image, cv2.COLOR_RGB2YUV)
         lab_image = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
@@ -919,9 +939,11 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
 
         return foreground_mask, a_mask, b_mask, bounding_rect
 
-    @QtCore.pyqtSlot(np.ndarray, int, str)
+    @pyqtSlot(np.ndarray, int, str)
     def onReceiveImage(self, image, image_count, serial_number):
-        start_time = time.time()
+        processTime = QElapsedTimer()
+        processTime.start()
+        # start_time = time.time()
 
         self.latestImage = image
 
@@ -1097,85 +1119,98 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
             # TODO: append results to board, and display the decision.
             pass
 
-        time.sleep(0.005) # for nothing to do
+        #time.sleep(0.005) # for nothing to do
         ####################################################################################
         self.imageCanvas.setImage(copied)#, None if self.imageROI is None else self.imageROI)
 
-        end_time = time.time()
-        status_msg = 'FPS: {0:.2f}, Count: {1:d}'.format(1.0/(end_time-self.fpsTime+0.000001), image_count)
-        self.fpsTime = end_time
+        # end_time = time.time()
+        processed = processTime.elapsed()
+
+        elapsed = self.elapsedTime.elapsed()
+        self.fpsSum += 1000.0 / (elapsed+0.0000001)
+        self.fpsCount += 1
+
+        if self.fpsCount >= 10:
+            self.fpsMessage = 'FPS: {0:.2f}, Count: {1:d}'.format(self.fpsSum/self.fpsCount, image_count)
+            self.fpsSum = 0.0
+            self.fpsCount = 0
+
+        self.elapsedTime.restart()
+
+        # status_msg = 'FPS: {0:.2f}, Count: {1:d}'.format(1.0/(end_time-self.fpsTime+0.000001), image_count)
+        # self.fpsTime = end_time
 
         if self.modeButton.text() == 'Live View':
-            self.camera.sendSwTrigger()
+            self.visionCamera.sendSwTrigger()
         else: # 'Trigger Mode'
             if self.imageButton.isChecked() is True:
                 filename = self.imageCntSpinBox.text() + '.png'
                 cv2.imwrite(filename, cv2.cvtColor(self.latestImage, cv2.COLOR_RGB2BGR))
                 self.imageCntSpinBox.setValue(self.imageCntSpinBox.value() + 1)
 
-        self.statusBar.showMessage('Process: {0:.3f}, {1:s}'.format(end_time-start_time, status_msg))
+        self.statusBar.showMessage('Process: {0:.3f}[ms], {1:s}'.format(processed, self.fpsMessage))
 
-    @QtCore.pyqtSlot()
+    @pyqtSlot()
     def onReceiveShutdown(self):
         print('TODO: shutdown()')
 
-    @QtCore.pyqtSlot(int)
+    @pyqtSlot(int)
     def onReceiveThreshold(self, value):
         print('TODO: set the threshold value')
 
-    @QtCore.pyqtSlot()
+    @pyqtSlot()
     def onSenseTrigger(self):
         #self.fpsTime = new_time
-        self.camera.sendSwTrigger()
+        self.visionCamera.sendSwTrigger()
         print('TODO: triggering')
 
-    @QtCore.pyqtSlot()
+    @pyqtSlot()
     def onResetCount(self):
         #self.camera.imageCount = 0
         pass
 
-    @QtCore.pyqtSlot(int, int)
+    @pyqtSlot(int, int)
     def onCh1ChangedEvent(self, low_value, high_value):
         self.binRange[0][0] = low_value
         self.binRange[1][0] = high_value
         self.ch1LowerLabel.setText(str(low_value))
         self.ch1UpperLabel.setText(str(high_value))
 
-    @QtCore.pyqtSlot(int, int)
+    @pyqtSlot(int, int)
     def onCh2ChangedEvent(self, low_value, high_value):
         self.binRange[0][1] = low_value
         self.binRange[1][1] = high_value
         self.ch2LowerLabel.setText(str(low_value))
         self.ch2UpperLabel.setText(str(high_value))
 
-    @QtCore.pyqtSlot(int, int)
+    @pyqtSlot(int, int)
     def onCh3ChangedEvent(self, low_value, high_value):
         self.binRange[0][2] = low_value
         self.binRange[1][2] = high_value
         self.ch3LowerLabel.setText(str(low_value))
         self.ch3UpperLabel.setText(str(high_value))
 
-    @QtCore.pyqtSlot(bool)
+    @pyqtSlot(bool)
     def onCh1ToggledEvent(self, checked):
         #print('Ch1:', checked)
         self.binCh1Apply = checked
 
-    @QtCore.pyqtSlot(bool)
+    @pyqtSlot(bool)
     def onCh2ToggledEvent(self, checked):
         #print('Ch2:', checked)
         self.binCh2Apply = checked
 
-    @QtCore.pyqtSlot(bool)
+    @pyqtSlot(bool)
     def onCh3ToggledEvent(self, checked):
         #print('Ch3:', checked)
         self.binCh3Apply = checked
 
-    @QtCore.pyqtSlot(bool)
+    @pyqtSlot(bool)
     def onAToggledEvent(self, checked):
         #print('A*:', checked)
         self.aInspect = checked
 
-    @QtCore.pyqtSlot(int, int)
+    @pyqtSlot(int, int)
     def onAChangedEvent(self, low_value, high_value):
         #print('a*:', value)
         self.aRange[0][1] = low_value
@@ -1183,12 +1218,12 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         self.aLowerLabel.setText(str(low_value))
         self.aUpperLabel.setText(str(high_value))
 
-    @QtCore.pyqtSlot(bool)
+    @pyqtSlot(bool)
     def onBToggledEvent(self, checked):
         #print('B*:', checked)
         self.bInspect = checked
 
-    @QtCore.pyqtSlot(int, int)
+    @pyqtSlot(int, int)
     def onBChangedEvent(self, low_value, high_value):
         #print('b*:', value)
         self.bRange[0][2] = low_value
@@ -1196,33 +1231,33 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
         self.bLowerLabel.setText(str(low_value))
         self.bUpperLabel.setText(str(high_value))
 
-    @QtCore.pyqtSlot(int)
+    @pyqtSlot(int)
     def onExposureChangedEvent(self, value):
         #print('Exposure:', value)
         self.exposureLabel.setText(str(value))
-        self.camera.setExposure(value)
+        self.visionCamera.setExposure(value)
 
-    @QtCore.pyqtSlot(int)
+    @pyqtSlot(int)
     def onGainChangedEvent(self, value):
         #print('Gain:', value)
         self.gainLabel.setText(str(value))
-        self.camera.setGain(value)
+        self.visionCamera.setGain(value)
 
-    @QtCore.pyqtSlot(int)
+    @pyqtSlot(int)
     def onDelayChangedEvent(self, value):
         #print('Delay:', value)
         self.delayLabel.setText(str(value))
         if self.serialThread is not None:
             self.serialThread.sendTriggerDelay(value)
 
-    @QtCore.pyqtSlot(int)
+    @pyqtSlot(int)
     def onLightChangedEvent(self, value):
         #print('Light:', value)
         self.lightLabel.setText(str(value))
         if self.serialThread is not None:
             self.serialThread.sendLightDuration(value)
 
-    @QtCore.pyqtSlot()
+    @pyqtSlot()
     def onLightMode(self):
         if self.onRadio.isChecked():
             self.lightMode = 'On'
@@ -1237,14 +1272,15 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
             if self.serialThread is not None:
                 self.serialThread.turnLightAuto()
 
-    @QtCore.pyqtSlot(bool)
+    @pyqtSlot(bool)
     def onModeToggledEvent(self, state):
         #print('mode:', state)
         if state:
             self.modeButton.setText('Live View')
             #self.cameraThread.setCaptureMode(-1)
-            self.camera.sendSwTrigger()
-            self.fpsTime = time.time()
+            self.visionCamera.sendSwTrigger()
+            # self.fpsTime = time.time()
+            self.elapsedTime.start()
 
             self.onRadio.setEnabled(True)
             self.offRadio.setEnabled(True)
@@ -1295,7 +1331,7 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
 
             self.imageButton.setCheckable(True)
 
-    @QtCore.pyqtSlot(bool)
+    @pyqtSlot(bool)
     def onRoiToggledEvent(self, state):
         #print('roi:', state)
         if state:
@@ -1305,7 +1341,7 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
             self.imageCanvas.setRubberBand(False)
             self.roiButton.setText('Locked ROI')
 
-    @QtCore.pyqtSlot()
+    @pyqtSlot()
     def onImageClickedEvent(self):
         '''
         options = QtWidgets.QFileDialog.Options()
@@ -1321,23 +1357,23 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
             cv2.imwrite(filename, cv2.cvtColor(self.latestImage, cv2.COLOR_RGB2BGR))
             self.imageCntSpinBox.setValue(self.imageCntSpinBox.value()+1)
 
-    @QtCore.pyqtSlot()
+    @pyqtSlot()
     def onConfigClickedEvent(self):
-        options = QtWidgets.QFileDialog.Options()
-        options |= QtWidgets.QFileDialog.DontUseNativeDialog
-        filename, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save Configuration File", "", "Json Files (*.json);;All Files (*)", options=options)
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        filename, _ = QFileDialog.getSaveFileName(self, "Save Configuration File", "", "Json Files (*.json);;All Files (*)", options=options)
         if filename:
             fname,fext = os.path.splitext(filename)
             filename += '' if fext == '.json' or fext == '.JSON' else '.json'
             self.saveConfig(filename)
 
-    @QtCore.pyqtSlot()
+    @pyqtSlot()
     def exitProgram(self):
         self.close()
 
-    @QtCore.pyqtSlot()
+    @pyqtSlot()
     def closeEvent(self, event):
-        msgbox = QtWidgets.QMessageBox(self)
+        msgbox = QMessageBox(self)
         ret = msgbox.question(self,'Surface Inspector', "Are you sure to close ?", msgbox.Yes | msgbox.No)
         if ret == msgbox.Yes:
             print('I am closing now!')
@@ -1350,7 +1386,7 @@ class SurfaceInspectWindow(QtWidgets.QWidget):
             event.ignore()
 
 if __name__ == '__main__':
-    app = QtWidgets.QApplication(sys.argv)
+    app = QApplication(sys.argv)
 
     #dark_stylesheet = qdarkstyle.load_stylesheet_pyqt5()
     #app.setStyleSheet(dark_stylesheet)
@@ -1359,20 +1395,20 @@ if __name__ == '__main__':
     app.setStyle("Fusion")
 
     # Now use a palette to switch to dark colors:
-    palette = QtGui.QPalette()
-    palette.setColor(QtGui.QPalette.Window, QtGui.QColor(53, 53, 53))
-    palette.setColor(QtGui.QPalette.WindowText, QtCore.Qt.white)
-    palette.setColor(QtGui.QPalette.Base, QtGui.QColor(25, 25, 25))
-    palette.setColor(QtGui.QPalette.AlternateBase, QtGui.QColor(53, 53, 53))
-    palette.setColor(QtGui.QPalette.ToolTipBase, QtCore.Qt.white)
-    palette.setColor(QtGui.QPalette.ToolTipText, QtCore.Qt.white)
-    palette.setColor(QtGui.QPalette.Text, QtCore.Qt.white)
-    palette.setColor(QtGui.QPalette.Button, QtGui.QColor(53, 53, 53))
-    palette.setColor(QtGui.QPalette.ButtonText, QtCore.Qt.white)
-    palette.setColor(QtGui.QPalette.BrightText, QtCore.Qt.red)
-    palette.setColor(QtGui.QPalette.Link, QtGui.QColor(42, 130, 218))
-    palette.setColor(QtGui.QPalette.Highlight, QtGui.QColor(42, 130, 218))
-    palette.setColor(QtGui.QPalette.HighlightedText, QtCore.Qt.black)
+    palette = QPalette()
+    palette.setColor(QPalette.Window, QColor(53, 53, 53))
+    palette.setColor(QPalette.WindowText, Qt.white)
+    palette.setColor(QPalette.Base, QColor(25, 25, 25))
+    palette.setColor(QPalette.AlternateBase, QColor(53, 53, 53))
+    palette.setColor(QPalette.ToolTipBase, Qt.white)
+    palette.setColor(QPalette.ToolTipText, Qt.white)
+    palette.setColor(QPalette.Text, Qt.white)
+    palette.setColor(QPalette.Button, QColor(53, 53, 53))
+    palette.setColor(QPalette.ButtonText, Qt.white)
+    palette.setColor(QPalette.BrightText, Qt.red)
+    palette.setColor(QPalette.Link, QColor(42, 130, 218))
+    palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+    palette.setColor(QPalette.HighlightedText, Qt.black)
     app.setPalette(palette)
 
     win = SurfaceInspectWindow('config.json')
