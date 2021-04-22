@@ -8,5 +8,4 @@ PyCRC==1.21
 PyQt5==5.13.1
 PyQt5-sip==12.7.0
 pyserial==3.4
-PyYAML==5.1.2
 spinnaker-python==1.26.0.31
