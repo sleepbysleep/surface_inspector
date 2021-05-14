@@ -1,5 +1,13 @@
 # surface_inspector
-Surface inspector for agricultural products using Flir(previously PointGrey) USB3 camera with Spinnaker SDK, and PySpin, python module(1.26.0.31) with Opencv, PyQt5, PySerial, and etc.
+Surface inspector for agricultural products using Flir(previously PointGrey) USB3 camera with Spinnaker SDK, and PySpin, python module(1.26.0.31) with Opencv, PyQt5, PySerial, and etc. It is capable of Color Correction based on MecBeth Chart, Lens Distortion Correction based on generic lens model including fisheye, and omnidirectional model, and multiple ROI processing.
+
+# Screenshot
+## Calibration Panel
+![alt ROI Setting + Calibration](Screenshot_2021-05-14_14-22-56.png)
+## Binarization Penel
+![alt ROI Setting + Binarization](Screenshot_2021-05-14_14-23-25.png)
+## Setting Panel for tuning camera
+![alt ROI Setting + Camera Setting](Screenshot_2021-05-14_14-23-41.png)
 
 # Dependencies
 ## 1. Install Spinnaker SDK.
