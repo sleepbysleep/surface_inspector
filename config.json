@@ -1,90 +1,89 @@
 {
-  "Application": {
-    "WindowSize": [
-      1,
-      24,
-      1183,
-      1012
+  "ROISetting": {
+    "Activate": true,
+    "Rects": [
+      [ 10, 10, 150, 200 ],
+      [ 20, 10, 150, 200 ],
+      [ 30, 10, 150, 200 ],
+      [ 40, 10, 150, 200 ],
+      [ 10, 20, 150, 200 ],
+      [ 20, 20, 150, 200 ],
+      [ 30, 20, 150, 200 ],
+      [ 40, 20, 150, 200 ],
+      [ 10, 30, 150, 200 ],
+      [ 20, 30, 150, 200 ],
+      [ 30, 30, 150, 200 ],
+      [ 40, 30, 150, 200 ],
+      [ 10, 40, 150, 200 ],
+      [ 20, 40, 150, 200 ],
+      [ 30, 40, 150, 200 ],
+      [ 40, 40, 150, 200 ]
     ],
-    "ROIs": [
-      [
-        260,
-        76,
-        352,
-        284
-      ]
-    ],
-    "Templates": [
-      "./template/01.bmp",
-      "./template/02.bmp",
-      "./template/03.bmp",
-      "./template/04.bmp",
-      "./template/05.bmp",
-      "./template/06.bmp",
-      "./template/07.bmp",
-      "./template/08.bmp",
-      "./template/09.bmp",
-      "./template/10.bmp",
-      "./template/11.bmp",
-      "./template/12.bmp",
-      "./template/13.bmp",
-      "./template/14.bmp",
-      "./template/15.bmp",
-      "./template/16.bmp",
-      "./template/17.bmp",
-      "./template/18.bmp",
-      "./template/19.bmp",
-      "./template/20.bmp"
+    "Enable": [
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
     ]
   },
-  "Camera": {
-    "SerialNumber": "19050819",
-    "Exposure": 10000,
-    "Gain": 0,
-    "Delay": 80,
-    "Light": 100,
-    "LightMode": "On"
+  "Calibration": {
+    "ColorCorrection": {
+      "Filename": "color_correction.xml",
+      "Enable": true
+    },
+    "CameraCalibration": {
+      "Filename": "camera_calibration.xml",
+      "Enable": true
+    }
   },
-  "ISP": {
+  "Binarization": {
     "MinArea": 100,
-    "BinCh1Apply": true,
-    "BinCh2Apply": true,
-    "BinCh3Apply": true,
-    "BinLowerLimit": [
-      39,
-      48,
-      128
-    ],
-    "BinUpperLimit": [
-      140,
-      173,
-      223
-    ],
-    "AInspect": true,
-    "ALowerLimit": [
-      0,
-      150,
-      0
-    ],
-    "AUpperLimit": [
-      255,
-      235,
-      255
-    ],
-    "BInspect": true,
-    "BLowerLimit": [
-      0,
-      0,
-      62
-    ],
-    "BUpperLimit": [
-      255,
-      255,
-      122
-    ]
+    "LowerLimit": [39, 48, 128],
+    "HigherLimit": [140, 173, 223]
   },
   "Communication": {
     "DevicePath": "COM1",
     "BaudRate": 115200
-  }
+  },
+  "Setting": {
+    "Exposure": 100,
+    "Gain": 0,
+    "Delay": 80,
+    "Light": 100,
+    "LightMode": "Auto"
+  },
+  "Templates": [
+    "./template/01.bmp",
+    "./template/02.bmp",
+    "./template/03.bmp",
+    "./template/04.bmp",
+    "./template/05.bmp",
+    "./template/06.bmp",
+    "./template/07.bmp",
+    "./template/08.bmp",
+    "./template/09.bmp",
+    "./template/10.bmp",
+    "./template/11.bmp",
+    "./template/12.bmp",
+    "./template/13.bmp",
+    "./template/14.bmp",
+    "./template/15.bmp",
+    "./template/16.bmp",
+    "./template/17.bmp",
+    "./template/18.bmp",
+    "./template/19.bmp",
+    "./template/20.bmp"
+  ]
 }

@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
+import sys
 from PyQt5.QtCore import QPropertyAnimation, QRectF, QSize, Qt, pyqtProperty
 from PyQt5.QtGui import QPainter
 from PyQt5.QtWidgets import (
@@ -153,3 +154,30 @@ class Switch(QAbstractButton):
     def enterEvent(self, event):  # pylint: disable=invalid-name
         self.setCursor(Qt.PointingHandCursor)
         super().enterEvent(event)
+
+if __name__ == "__main__":
+    app = QApplication([])
+
+    # Thumb size < track size (Gitlab style)
+    s1 = Switch()
+    s1.toggled.connect(lambda c: print('toggled', c))
+    s1.clicked.connect(lambda c: print('clicked', c))
+    s1.pressed.connect(lambda: print('pressed'))
+    s1.released.connect(lambda: print('released'))
+    s2 = Switch()
+    s2.setEnabled(False)
+
+    # Thumb size > track size (Android style)
+    s3 = Switch(thumb_radius=11, track_radius=8)
+    s4 = Switch(thumb_radius=11, track_radius=8)
+    s4.setEnabled(False)
+
+    l = QHBoxLayout()
+    l.addWidget(s1)
+    l.addWidget(s2)
+    l.addWidget(s3)
+    l.addWidget(s4)
+    w = QWidget()
+    w.setLayout(l)
+    w.show()
+    sys.exit(app.exec_())
