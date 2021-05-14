@@ -1,11 +1,17 @@
 # surface_inspector
-Surface inspector for agricultural products using Flir(previously PointGrey) USB3 camera with Spinnaker SDK, and PySpin, python module(1.26.0.31) with Opencv, PyQt5, PySerial, and etc. It is capable of Color Correction based on MecBeth Chart, Lens Distortion Correction based on generic lens model including fisheye, and omnidirectional model, and multiple ROI processing.
+Python code for surface inspection is supposed to used especially for agricultural products, which requires Flir(previously PointGrey) USB3 camera with Spinnaker SDK, and PySpin, python module(1.26.0.31) with Opencv, PyQt5, PySerial, and etc.
+It is capable of Color Correction, Binarization, Lens Distortion Correction, and multiple ROI processing.
+The color Correction is implemented with OpenCV.mcc and OpenCV.ccm (i.e. Color Correction matrix) from MecBeth Color Chart.
+As well as the Lens Distortion Correction provides generic model as options of fisheye, and omnidirectional model in the form of modified opencv ccalib package.
+The Binarization is capable of look and feel control by RangeSlider with sliding both of lower, and higher values.
 
 # Screenshot
 ## Calibration Panel
 ![alt ROI Setting + Calibration](Screenshot_2021-05-14_14-22-56.png)
+
 ## Binarization Penel
 ![alt ROI Setting + Binarization](Screenshot_2021-05-14_14-23-25.png)
+
 ## Setting Panel for tuning camera
 ![alt ROI Setting + Camera Setting](Screenshot_2021-05-14_14-23-41.png)
 
