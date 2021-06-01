@@ -1017,8 +1017,8 @@ class SurfaceInspectWindow(QMainWindow):
             else:
                 self.imageCanvas.setImage(
                     self.background_image,
-                    [x for i, x in enumerate(self.roiWidget.roi_rects) if self.roiWidget.bitmask & (1 << i) and self.roiWidget.is_activated],
-                    [x for i, x in enumerate(self.roiWidget.roi_colors) if self.roiWidget.bitmask & (1 << i) and self.roiWidget.is_activated]
+                    [x for i, x in enumerate(self.roiWidget.roi_rects) if self.roiWidget.enable_list[i] and self.roiWidget.is_activated],
+                    [x for i, x in enumerate(self.roiWidget.roi_colors) if self.roiWidget.enable_list[i] and self.roiWidget.is_activated]
                 )
         else:
             self.modeButton.setText('Trigger Mode')
@@ -1046,16 +1046,25 @@ class SurfaceInspectWindow(QMainWindow):
 
         options = QFileDialog.Options()
         # options |= QFileDialog.DontUseNativeDialog
+        # dialog.setDefaultSuffix(".csv");
         filename,filter = QFileDialog.getSaveFileName(
             self,
-            "Save Configuration File",
+            "Save Raw Image",
             self.getFileDialogDirectory(),
             self.getFileDialogFilter(),
             options=options
         )
+
         if filename and filename != "":
             fname,fext = os.path.splitext(filename)
-            cv2.imwrite(fname + ".png" if fext == "" else fext, self.raw_image)
+            new_filename = fname
+            if fext == "": new_filename += ".png"
+            else: new_filename += fext
+            if os.path.isfile(new_filename):
+                msgbox = QMessageBox(self)
+                ret = msgbox.question(self, new_filename, "Are you sure to overwrite ?", msgbox.Yes | msgbox.No)
+                if ret == msgbox.No: return
+            cv2.imwrite(new_filename, self.raw_image)
 
     def onSaveCalibImageEvent(self):
         if self.undistorted_image is None: return
@@ -1064,14 +1073,22 @@ class SurfaceInspectWindow(QMainWindow):
         # options |= QFileDialog.DontUseNativeDialog
         filename,filter = QFileDialog.getSaveFileName(
             self,
-            "Save Configuration File",
+            "Save Calibrated Image",
             self.getFileDialogDirectory(),
             self.getFileDialogFilter(),
             options=options
         )
+
         if filename and filename != "":
             fname,fext = os.path.splitext(filename)
-            cv2.imwrite(fname + ".png" if fext == "" else fext, self.undistorted_image)
+            new_filename = fname
+            if fext == "": new_filename += ".png"
+            else: new_filename += fext
+            if os.path.isfile(new_filename):
+                msgbox = QMessageBox(self)
+                ret = msgbox.question(self, new_filename, "Are you sure to overwrite ?", msgbox.Yes | msgbox.No)
+                if ret == msgbox.No: return
+            cv2.imwrite(new_filename, self.undistorted_image)
 
     def closeEvent(self, event):
         msgbox = QMessageBox(self)
