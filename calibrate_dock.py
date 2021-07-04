@@ -499,7 +499,7 @@ class CalibratePanel(QWidget):
     def processColorCheckerDetection(self, image:np.ndarray):
         img_draw = image.copy()
         try:
-            self.color_checker_detector.process(image, cv2.mcc.MCC24)
+            self.color_checker_detector.process(cv2.cvtColor(image, cv2.COLOR_RGB2BGR), cv2.mcc.MCC24)
 
             checker = self.color_checker_detector.getBestColorChecker()
             cdraw = cv2.mcc.CCheckerDraw_create(checker)
@@ -523,7 +523,7 @@ class CalibratePanel(QWidget):
         # print("loss ", loss)
 
         # rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        rgb_image = image.copy()
+        rgb_image = image.copy() # RGB format
         rgb_image = rgb_image.astype(np.float64)
         rgb_image = rgb_image / 255
         calibrated_image = model1.infer(rgb_image)
@@ -532,13 +532,16 @@ class CalibratePanel(QWidget):
         calibrated_image[calibrated_image > 255] = 255
         calibrated_image = calibrated_image.astype(np.uint8)
 
-        res_image = cv2.cvtColor(calibrated_image, cv2.COLOR_RGB2BGR)
+        #res_image = cv2.cvtColor(calibrated_image, cv2.COLOR_RGB2BGR)
+
         # file, ext = os.path.splitext(image_path)
         # calibratedFilePath = file + '_calibrated' + ext
         # # cv2.imwrite(calibratedFilePath, out_img)
         # cv2.imencode(ext, out_img)[1].tofile(calibratedFilePath)
         # cv2.imshow('out_img', out_img)
-        return res_image
+
+        #return res_image
+        return calibrated_image
 
     def processChessboardDetectioin(self, image:np.ndarray):
         detected_image = image.copy()

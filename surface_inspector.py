@@ -844,7 +844,7 @@ class SurfaceInspectWindow(QMainWindow):
         processTime.start()
         # start_time = time.time()
 
-        self.raw_image = image
+        self.raw_image = image # RGB format
 
         if self.calibrateWidget.need_color_checker_detection:
             self.undistorted_image = self.calibrateWidget.processColorCheckerDetection(self.raw_image)
@@ -1058,13 +1058,16 @@ class SurfaceInspectWindow(QMainWindow):
         if filename and filename != "":
             fname,fext = os.path.splitext(filename)
             new_filename = fname
-            if fext == "": new_filename += ".png"
-            else: new_filename += fext
-            if os.path.isfile(new_filename):
-                msgbox = QMessageBox(self)
-                ret = msgbox.question(self, new_filename, "Are you sure to overwrite ?", msgbox.Yes | msgbox.No)
-                if ret == msgbox.No: return
-            cv2.imwrite(new_filename, self.raw_image)
+            if fext == "":
+                new_filename += ".png"
+                if os.path.isfile(new_filename):
+                    msgbox = QMessageBox(self)
+                    ret = msgbox.question(self, new_filename, "Are you sure to overwrite ?", msgbox.Yes | msgbox.No)
+                    if ret == msgbox.No: return
+            else:
+                new_filename += fext
+
+            cv2.imwrite(new_filename, cv2.cvtColor(self.raw_image, cv2.COLOR_RGB2BGR))
 
     def onSaveCalibImageEvent(self):
         if self.undistorted_image is None: return
@@ -1082,13 +1085,16 @@ class SurfaceInspectWindow(QMainWindow):
         if filename and filename != "":
             fname,fext = os.path.splitext(filename)
             new_filename = fname
-            if fext == "": new_filename += ".png"
-            else: new_filename += fext
-            if os.path.isfile(new_filename):
-                msgbox = QMessageBox(self)
-                ret = msgbox.question(self, new_filename, "Are you sure to overwrite ?", msgbox.Yes | msgbox.No)
-                if ret == msgbox.No: return
-            cv2.imwrite(new_filename, self.undistorted_image)
+            if fext == "":
+                new_filename += ".png"
+                if os.path.isfile(new_filename):
+                    msgbox = QMessageBox(self)
+                    ret = msgbox.question(self, new_filename, "Are you sure to overwrite ?", msgbox.Yes | msgbox.No)
+                    if ret == msgbox.No: return
+            else:
+                new_filename += fext
+
+            cv2.imwrite(new_filename, cv2.cvtColor(self.undistorted_image, cv2.COLOR_RGB2BGR))
 
     def closeEvent(self, event):
         msgbox = QMessageBox(self)
