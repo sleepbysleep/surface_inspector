@@ -142,8 +142,8 @@
     ]
   },
   "Setting": {
-    "Exposure": 503.0,
-    "Gain": 0.0,
+    "Exposure": 1999,
+    "Gain": 0,
     "Delay": 80,
     "Light": 100,
     "LightMode": "Auto"

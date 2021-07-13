@@ -557,8 +557,8 @@ class SurfaceInspectWindow(QMainWindow):
         ]
 
         save_dict['Setting'] = dict()
-        save_dict['Setting']["Exposure"] = self.visionCamera.getExposure()
-        save_dict['Setting']["Gain"] = self.visionCamera.getGain()
+        save_dict['Setting']["Exposure"] = int(self.visionCamera.getExposure())
+        save_dict['Setting']["Gain"] = int(self.visionCamera.getGain())
         save_dict['Setting']["Delay"] = self.controlWidget.delaySlider.value()
         save_dict['Setting']["Light"] = self.controlWidget.lightSlider.value()
         save_dict["Setting"]["LightMode"] = self.controlWidget.lightMode
