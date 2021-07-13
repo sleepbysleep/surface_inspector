@@ -60,10 +60,6 @@ class SurfaceInspectWindow(QMainWindow):
         self.lockButton.setChecked(True)
         self.lockUI()
 
-        # TODO: Load default config file
-        if self.filename:
-            self.loadConfig(self.filename)
-
         # self.resize(1280, 720)
 
         try:
@@ -97,6 +93,14 @@ class SurfaceInspectWindow(QMainWindow):
         #     self.serialThread = None
 
         if self.visionCamera:
+            self.controlWidget.setExposureUI(
+                (self.visionCamera.getMinExposure(), 100000, self.visionCamera.getExposure())
+            )
+
+            self.controlWidget.setGainUI(
+                (self.visionCamera.getMinGain(), self.visionCamera.getMaxGain(), self.visionCamera.getGain())
+            )
+
             self.setWindowTitle(
                 'Surface Inspector - Serial#: {0:s}, Config: {1:s}'.format(
                     self.visionCamera.getDeviceName(), self.filename
@@ -112,6 +116,10 @@ class SurfaceInspectWindow(QMainWindow):
             self.visionCamera.sendSwTrigger()
         else:
             self.imageCanvas.setImage(self.background_image)
+
+        # TODO: Load default config file
+        if self.filename:
+            self.loadConfig(self.filename)
 
     def __del__(self):
         if self.visionCamera: del self.visionCamera
@@ -520,32 +528,48 @@ class SurfaceInspectWindow(QMainWindow):
         #print(self.templateFeatures)
 
     def saveConfig(self, filename='config.json'):
-        json_config = dict()
-        json_config['Application'] = dict()
-        self.windowGeometry = self.geometry()
-        # json_config['Application']['WindowSize'] = [self.windowGeometry.x(), self.windowGeometry.y(), self.windowGeometry.width(), self.windowGeometry.height()]
-        #json_config['Application']['ROIs'] = [self.imageROI.x(), self.imageROI.y(), self.imageROI.width(), self.imageROI.height()]
-        json_config['Application']['ROIs'] = self.roiWidget.roi_rects #self.imageROIs
-        json_config['Application']['Templates'] = self.templatePaths
+        save_dict = dict()
+        save_dict["ROISetting"] = dict()
 
-        json_config['Camera'] = dict()
-        json_config['Camera']['SerialNumber'] = self.serialNumber
-        json_config['Camera']['Exposure'] = self.exposureValue
-        json_config['Camera']['Gain'] = self.gainValue
-        json_config['Camera']['Delay'] = self.delayValue
-        json_config['Camera']['Light'] = self.lightValue
-        json_config['Camera']['LightMode'] = self.lightMode
+        save_dict["ROISetting"]["Activate"] = self.roiWidget.is_activated
+        save_dict["ROISetting"]["Rects"] = self.roiWidget.roi_rects
+        save_dict["ROISetting"]["Enable"] = self.roiWidget.enable_list
 
-        json_config['ISP'] = dict()
-        json_config['ISP']['MinArea'] = self.minArea
-        json_config['ISP']['BinLowerLimit'] = self.binRange[0]
-        json_config['ISP']['BinUpperLimit'] = self.binRange[1]
+        save_dict["Calibration"] = dict()
+        save_dict["Calibration"]["ColorCorrection"] = dict()
+        save_dict["Calibration"]["ColorCorrection"]["Filename"] = self.calibrateWidget.color_correct_filename
+        save_dict["Calibration"]["ColorCorrection"]["Enable"] = self.calibrateWidget.need_color_correction
+        save_dict["Calibration"]["CameraCalibration"] = dict()
+        save_dict["Calibration"]["CameraCalibration"]["Filename"] = self.calibrateWidget.camera_calibrate_filename
+        save_dict["Calibration"]["CameraCalibration"]["Enable"] = self.calibrateWidget.need_lens_distortion_correction
 
-        json_config['Communication'] = dict()
-        json_config['Communication']['DevicePath'] = self.commPath
-        json_config['Communication']['BaudRate'] = self.commBaudrate
-        
-        json_txt = json.dumps(json_config, indent=2, separators=(',', ': '))
+        save_dict["Binarization"] = dict()
+        save_dict["Binarization"]['MinArea'] = self.minArea
+        save_dict["Binarization"]["LowerLimit"] = [
+            self.binarizeWidget.lRangeSlider.low(),
+            self.binarizeWidget.aRangeSlider.low(),
+            self.binarizeWidget.bRangeSlider.low()
+        ]
+        save_dict["Binarization"]["HigherLimit"] = [
+            self.binarizeWidget.lRangeSlider.high(),
+            self.binarizeWidget.aRangeSlider.high(),
+            self.binarizeWidget.bRangeSlider.high()
+        ]
+
+        save_dict['Setting'] = dict()
+        save_dict['Setting']["Exposure"] = self.visionCamera.getExposure()
+        save_dict['Setting']["Gain"] = self.visionCamera.getGain()
+        save_dict['Setting']["Delay"] = self.controlWidget.delaySlider.value()
+        save_dict['Setting']["Light"] = self.controlWidget.lightSlider.value()
+        save_dict["Setting"]["LightMode"] = self.controlWidget.lightMode
+
+        save_dict['Communication'] = dict()
+        save_dict['Communication']['DevicePath'] = self.commPath
+        save_dict['Communication']['BaudRate'] = self.commBaudrate
+
+        save_dict['Templates'] = self.templatePaths
+
+        json_txt = json.dumps(save_dict, indent=2, separators=(',', ': '))
         with open(filename, 'w') as file:
             file.write(json_txt)
 
@@ -840,6 +864,12 @@ class SurfaceInspectWindow(QMainWindow):
 
     @pyqtSlot(np.ndarray, int, str)
     def onReceiveImage(self, image, image_count, serial_number):
+        if image is None:
+            if self.modeButton.text() == 'Live View':
+                QThread.msleep(100)
+                self.visionCamera.sendSwTrigger()
+            return
+
         processTime = QElapsedTimer()
         processTime.start()
         # start_time = time.time()

@@ -21,6 +21,28 @@ class ControlPanel(QWidget):
     def createSignals(self):
         pass
 
+    def setExposureUI(self, exposure):
+        self.exposureMinValue = exposure[0]
+        self.exposureMaxValue = exposure[1]
+        self.exposureValue = exposure[2]
+
+        self.exposureSpin.setRange(self.exposureMinValue, self.exposureMaxValue)
+        self.exposureSpin.lineEdit().setText(str(self.exposureValue))
+
+        self.exposureSlider.setRange(self.exposureMinValue, self.exposureMaxValue)
+        self.exposureSlider.setValue(self.exposureValue)
+
+    def setGainUI(self, gain):
+        self.gainMinValue = gain[0]
+        self.gainMaxValue = gain[1]
+        self.gainValue = gain[2]
+
+        self.gainSpin.setRange(self.gainMinValue, self.gainMaxValue)
+        self.gainSpin.lineEdit().setText(str(self.gainValue))
+
+        self.gainSlider.setRange(self.gainMinValue, self.gainMaxValue)
+        self.gainSlider.setValue(self.gainValue)
+
     def initAssets(self, exposure:tuple=None, gain:tuple=None, delay:tuple=None, light:tuple=None, light_mode:str=None):
         self.visionCamera = None
         self.serialThread = None
